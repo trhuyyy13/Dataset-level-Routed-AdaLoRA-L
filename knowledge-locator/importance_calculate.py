@@ -8,17 +8,23 @@ class APILayerImportance:
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path,
             torch_dtype=torch.float16,
-            device_map="auto", local_files_only=True
+            device_map="auto",
+            trust_remote_code=True,
         )
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, local_files_only=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_name_or_path,
+            trust_remote_code=True,
+            use_fast=False,
+        )
         self.tokenizer.pad_token = self.tokenizer.eos_token
+
         if imp_func == 'fisher':
             self.imp_func = self._compute_fisher_information
         else:
             self.imp_func = self._compute_sensitivity
         
         self.edit_module_names = []
-        if 'starcoder' in model_name_or_path:
+        if 'starcoder' in model_name_or_path.lower():
             for i in range(len(self.model.model.layers)):
                 self.edit_module_names.append(f"model.layers.{i}.self_attn.q_proj")
                 self.edit_module_names.append(f"model.layers.{i}.self_attn.v_proj")
@@ -28,7 +34,6 @@ class APILayerImportance:
                 self.edit_module_names.append(f"model.layers.{i}.mlp.{proj_name}")
         
         self.module_importance = {name: 0.0 for name in self.edit_module_names}
-        
         self._freeze_non_edit_params()
         
     def _freeze_non_edit_params(self):
@@ -53,18 +58,19 @@ class APILayerImportance:
         )
         input_ids = inputs["input_ids"].to(self.model.device)
         attention_mask = inputs["attention_mask"].to(self.model.device)
-        offsets = inputs["offset_mapping"][0].numpy()
+        offsets = inputs["offset_mapping"][0].cpu().numpy()
         original_text = input_text
 
         api_start = original_text.find(target_api)
-        api_end = api_start + len(target_api)
         if api_start == -1:
             raise ValueError(f"The target API was not found in the input text: {target_api}")
+        api_end = api_start + len(target_api)
 
         api_token_indices = []
         for token_idx, (start, end) in enumerate(offsets):
-            if not (end < api_start or start > api_end):
+            if not (end <= api_start or start >= api_end):
                 api_token_indices.append(token_idx)
+
         if not api_token_indices:
             raise ValueError(f"No token corresponding to the target API was found: {target_api}")
         
@@ -79,7 +85,7 @@ class APILayerImportance:
 
         mask = torch.zeros_like(token_losses, device=self.model.device)
         for idx in api_token_indices:
-            if idx - 1 >= 0 and idx - 1 < mask.size(1):
+            if 0 <= idx - 1 < mask.size(1):
                 mask[0, idx - 1] = 1.0
 
         focused_loss = (token_losses * mask).sum()
@@ -106,17 +112,13 @@ class APILayerImportance:
                 self.module_importance[module_name] = scores[module_name]
 
         layer_scores = {}
-        for name, _score in self.module_importance.items():
+        for name, score in self.module_importance.items():
             layer_idx = int(name.split(".")[2])
             if layer_idx not in layer_scores:
                 layer_scores[layer_idx] = 0.0
-            layer_scores[layer_idx] += _score
+            layer_scores[layer_idx] += score
 
-        sorted_result = sorted(
-            layer_scores.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )
+        sorted_result = sorted(layer_scores.items(), key=lambda x: x[1], reverse=True)
         return sorted_result
     
     def _compute_sensitivity(self, param, grad):
@@ -127,7 +129,7 @@ class APILayerImportance:
     def _compute_fisher_information(self, param, grad):
         if grad is None:
             return torch.tensor(0.0, device=param.device)
-        return (grad **2).mean()
+        return (grad ** 2).mean()
     
     def initialize_importance(self):
         self.module_importance = {name: 0.0 for name in self.edit_module_names}
