@@ -84,12 +84,19 @@ def execute_routed_adalora(
     model.enable_input_require_grads()
     
     # ── Step 3: Create one adapter per API ──
-    if hparams.lora_type == "adalora":
-        ConfigClass = AdaLoraConfig
-    elif hparams.lora_type == "lora":
+    # NOTE: AdaLoRA only supports 1 trainable adapter at a time (PEFT limitation).
+    # For multi-adapter routing, we use standard LoRA which supports multiple
+    # trainable adapters. The layer-specific routing is preserved.
+    if len(api_to_requests) > 1:
+        if hparams.lora_type == "adalora":
+            LOG.info("AdaLoRA does not support multiple trainable adapters. "
+                     "Falling back to LoRA for multi-adapter routing.")
         ConfigClass = LoraConfig
     else:
-        raise NotImplementedError(f"lora_type {hparams.lora_type} not supported")
+        if hparams.lora_type == "adalora":
+            ConfigClass = AdaLoraConfig
+        else:
+            ConfigClass = LoraConfig
     
     adapter_map = {}  # api_name -> adapter_name
     first_adapter = True
