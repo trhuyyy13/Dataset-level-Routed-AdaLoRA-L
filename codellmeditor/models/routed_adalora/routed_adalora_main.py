@@ -154,16 +154,47 @@ def execute_routed_adalora(
         weight_decay=hparams.weight_decay,
     )
     
-    loss_meter = AverageMeter()
     api_names = list(adapter_map.keys())
+    total_samples = sum(len(api_to_requests[api]) for api in api_names)
+    total_steps_per_epoch = sum(
+        (len(api_to_requests[api]) + hparams.batch_size - 1) // hparams.batch_size
+        for api in api_names
+    )
+    
+    # ── Training summary ──
+    LOG.info("=" * 60)
+    LOG.info("TRAINING CONFIGURATION")
+    LOG.info(f"  Total samples:         {total_samples}")
+    LOG.info(f"  Number of APIs:        {len(api_names)}")
+    LOG.info(f"  Number of adapters:    {len(adapter_map)}")
+    LOG.info(f"  Epochs:                {hparams.num_epochs}")
+    LOG.info(f"  Batch size:            {hparams.batch_size}")
+    LOG.info(f"  Steps per epoch:       {total_steps_per_epoch}")
+    LOG.info(f"  Total steps:           {total_steps_per_epoch * hparams.num_epochs}")
+    LOG.info(f"  Learning rate:         {hparams.lr}")
+    LOG.info(f"  Rank:                  {hparams.rank}")
+    LOG.info(f"  Common layers (frozen): {sorted(common_layers)}")
+    LOG.info(f"  Samples per API:")
+    for api in api_names:
+        LOG.info(f"    {api}: {len(api_to_requests[api])} samples")
+    LOG.info("=" * 60)
+    
+    import random
+    from tqdm import tqdm
     
     for epoch in range(hparams.num_epochs):
-        loss_meter.reset()
         epoch_loss = AverageMeter()
         
         # Shuffle API order each epoch
-        import random
         random.shuffle(api_names)
+        
+        # Progress bar for this epoch
+        pbar = tqdm(
+            total=total_steps_per_epoch,
+            desc=f"Epoch {epoch+1}/{hparams.num_epochs}",
+            unit="step",
+            bar_format="{l_bar}{bar:30}{r_bar}"
+        )
         
         for api_name in api_names:
             adapter_name = adapter_map[api_name]
@@ -211,7 +242,14 @@ def execute_routed_adalora(
                     loss.backward()
                     opt.step()
                     epoch_loss.update(loss.item(), n=bs)
+                
+                pbar.set_postfix({
+                    'loss': f'{epoch_loss.avg:.4f}',
+                    'api': api_name[:25],
+                })
+                pbar.update(1)
         
+        pbar.close()
         LOG.info(f"Epoch {epoch+1}/{hparams.num_epochs} - "
                  f"avg_loss: {epoch_loss.avg:.4f}")
     
