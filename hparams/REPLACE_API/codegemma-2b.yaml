@@ -1,0 +1,5 @@
+alg_name: "replace_api"
+model_name: google/codegemma-2b
+device: 0
+model_parallel: false
+fp16: true

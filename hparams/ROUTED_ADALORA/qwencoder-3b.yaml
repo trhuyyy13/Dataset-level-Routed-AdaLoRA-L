@@ -1,0 +1,19 @@
+alg_name: "ROUTED_ADALORA"
+model_name: Qwen/Qwen2.5-Coder-3B
+device: 0
+
+lora_type: "adalora"
+layers: []
+num_epochs: 3
+batch_size: 1
+max_length: 40
+lr: 5e-4
+weight_decay: 0
+kl_factor: 0
+rank: 8
+lora_alpha: 32
+lora_dropout: 0.1
+norm_constraint: false
+target_modules: ["down_proj"]
+model_parallel: false
+routing_strategy: "per_api"

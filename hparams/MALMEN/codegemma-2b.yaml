@@ -1,0 +1,54 @@
+alg_name: "MALMEN"
+model_name: google/codegemma-2b
+model_class: GemmaForCausalLM
+tokenizer_class: GemmaTokenizerFast
+tokenizer_name: google/codegemma-2b
+device: 0
+# Model
+inner_params:
+- model.layers.13.mlp.down_proj
+- model.layers.14.mlp.down_proj
+- model.layers.15.mlp.down_proj
+- model.layers.16.mlp.down_proj
+- model.layers.17.mlp.down_proj
+
+archive: ./results/models_DeprecatedAPI/MALMEN/codegemma-2b_data
+
+# Method
+alg: MALMEN
+dropout: 0.0
+train_base: False
+no_grad_layers: null
+
+rank: 920
+n_blocks: 2
+lr: 1e-6
+meta_lr: 1e-5
+loc_coef: 1
+max_grad_norm: 1
+token: ans
+
+# Train
+n_edits: 1
+batch_size: 2
+editor_batch_size: 256
+silent: False
+# max_epochs: 1
+max_iters: 1000
+log_interval: 100
+eval_log_interval: 100
+final_eval: True
+val_interval: 100
+early_stop_patience: 100
+early_stop_key: "ES_val"
+eval_only: False
+debug: False
+save: False
+
+val_batch_size: 1
+val_steps: 50 # only for debug
+
+model_parallel: false
+
+# Output
+results_dir: ./results

@@ -1,0 +1,56 @@
+alg_name: "MALMEN"
+model_name: deepseek-ai/deepseek-coder-1.3b-base
+model_class: LlamaForCausalLM
+tokenizer_class: LlamaTokenizerFast
+tokenizer_name: deepseek-ai/deepseek-coder-1.3b-base
+device: 0
+# Model
+inner_params:
+- model.layers.18.mlp.down_proj
+- model.layers.19.mlp.down_proj
+- model.layers.20.mlp.down_proj
+- model.layers.21.mlp.down_proj
+- model.layers.22.mlp.down_proj
+- model.layers.23.mlp.down_proj
+
+# archive: ./results/models_EditConala/MALMEN/CodeQwen1.5-7B
+archive: null
+# archive: ./results/models_EditCodeSearchNet/MALMEN/CodeQwen1.5-7B
+# Method
+alg: MALMEN
+dropout: 0.0
+train_base: False
+no_grad_layers: null
+
+rank: 1920
+n_blocks: 2
+lr: 1e-6
+meta_lr: 1e-5
+loc_coef: 1
+max_grad_norm: 1
+token: ans
+
+# Train
+n_edits: 1
+batch_size: 2
+editor_batch_size: 1024
+silent: False
+# max_epochs: 1
+max_iters: 1000
+log_interval: 100
+eval_log_interval: 100
+final_eval: True
+val_interval: 100
+early_stop_patience: 100
+early_stop_key: "ES_val"
+eval_only: False
+debug: False
+save: False
+
+val_batch_size: 1
+val_steps: 50 # only for debug
+
+model_parallel: false
+
+# Output
+results_dir: ./results

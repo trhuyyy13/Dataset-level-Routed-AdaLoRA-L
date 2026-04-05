@@ -1,0 +1,6 @@
+
+alg_name: "non-edit"
+model_name: "Qwen/Qwen2.5-Coder-3B"
+device: 0
+model_parallel: false
+fp16: true

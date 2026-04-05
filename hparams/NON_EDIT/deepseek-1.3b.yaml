@@ -1,0 +1,5 @@
+alg_name: "non-edit"
+model_name: deepseek-ai/deepseek-coder-1.3b-base
+device: 0
+model_parallel: false
+fp16: true
