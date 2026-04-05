@@ -9,7 +9,7 @@ def init_codellama7b(model_path="CodeLlama-7b-Python-hf", device="cuda", torch_d
     return model, tokenizer
 
 def init_deepseek1b(model_path="deepseek-ai/deepseek-coder-1.3b-base", device="cuda", torch_dtype=torch.float16):
-    model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True, torch_dtype=torch_dtype, local_files_only=True)
+    model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True, torch_dtype=torch_dtype)
     model.to(device)
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, padding_side='left', local_files_only=True)
     tokenizer.pad_token_id = tokenizer.eos_token_id
@@ -30,7 +30,7 @@ def init_starcoder3b(model_path="bigcode/starcoder2-3b", device="cuda", torch_dt
     return model, tokenizer
 
 def init_qwencoder3b(model_path="Qwen/Qwen2.5-Coder-3B", device="cuda", torch_dtype=torch.float16):
-    model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True, torch_dtype=torch_dtype, local_files_only=True)
+    model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True, torch_dtype=torch_dtype)
     model.to(device)
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, padding_side='left', local_files_only=True)
     tokenizer.pad_token_id = tokenizer.eos_token_id
