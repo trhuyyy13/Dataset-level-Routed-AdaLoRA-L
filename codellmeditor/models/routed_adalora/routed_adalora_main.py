@@ -250,9 +250,13 @@ def execute_routed_adalora(
                 pbar.update(1)
         
         pbar.close()
+        print(f"  ✓ Epoch {epoch+1}/{hparams.num_epochs} - avg_loss: {epoch_loss.avg:.4f}")
         LOG.info(f"Epoch {epoch+1}/{hparams.num_epochs} - "
                  f"avg_loss: {epoch_loss.avg:.4f}")
     
+    print(f"\n{'='*60}")
+    print(f"Training complete. {len(adapter_map)} adapters trained.")
+    print(f"{'='*60}")
     LOG.info(f"Training complete. {len(adapter_map)} adapters trained.")
     return model, adapter_map
 
