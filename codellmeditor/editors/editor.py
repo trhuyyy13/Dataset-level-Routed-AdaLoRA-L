@@ -351,10 +351,15 @@ class BaseEditor:
             
             # Resolve portability link
             if request["portability"] != "":
+                resolved = False
                 for line in requests:
                     if line['case_id'] == request["portability"]:
                         request["portability"] = line
+                        resolved = True
                         break
+                if not resolved:
+                    LOG.warning(f"Case {request['case_id']}: portability target '{request['portability']}' not found, skipping portability")
+                    request["portability"] = ""
             
             if continue_from_run and request["case_id"] in computed_cases:
                 LOG.debug(f"Case {request['case_id']} already exists.")
