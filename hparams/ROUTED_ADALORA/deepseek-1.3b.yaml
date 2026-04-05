@@ -4,7 +4,7 @@ device: 0
 
 lora_type: "adalora"
 layers: []
-num_epochs: 3
+num_epochs: 10
 batch_size: 1
 max_length: 40
 lr: 5e-4
