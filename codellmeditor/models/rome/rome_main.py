@@ -39,7 +39,8 @@ def apply_rome_to_model(
 
     weights_copy = {}
     requests = deepcopy(requests)
-    for i, request in enumerate(requests):
+    from tqdm import tqdm
+    for i, request in tqdm(enumerate(requests), total=len(requests), desc="Applying ROME Updates"):
         request.update({'prompt': request['prompt']})
         last_word = request['prompt'].split(' ')[-1]
         request['subject'] = last_word
