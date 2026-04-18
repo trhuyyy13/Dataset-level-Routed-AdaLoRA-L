@@ -35,6 +35,7 @@ if __name__ == "__main__":
     parser.add_argument('--metrics_save_dir', default='./output', type=str)
     parser.add_argument('--log_level', default='INFO', type=str)
     parser.add_argument('--suggest_layers', default=None, type=str)
+    parser.add_argument('--train_all_first', action='store_true', help="Tuỳ chọn Train hết data rồi test 1 lượt (dành cho baselines truyền thống)")
 
     args = parser.parse_args()
     log_level = logging.INFO
@@ -118,6 +119,13 @@ if __name__ == "__main__":
             layer_config=layer_config,
             generation_test_interval=args.generation_test_interval,
             continue_from_run=args.continue_from_run,
+        )
+    elif args.train_all_first:
+        metrics, edited_model, _ = editor.edit_dataset_level_baselines(
+            requests = test_datas,
+            data_set_name = args.data_set,
+            generation_test_interval = args.generation_test_interval,
+            continue_from_run = args.continue_from_run
         )
     elif args.editing_method in ['MALMEN', 'AGRACE']:
         train_datas = prepare_requests(train_datas, hparams.model_name, args.data_set, args.editing_method)

@@ -447,3 +447,151 @@ class BaseEditor:
         LOG.info(self.hparams)
 
         return all_metrics, edited_model, adapter_map
+
+    def edit_dataset_level_baselines(self,
+             requests,
+             data_set_name,
+             generation_test_interval: Optional[int] = 0,
+             continue_from_run=None,
+             ):
+        """
+        Dataset-level editing for traditional baselines (e.g. ROME, MEMIT, FT, LoRA):
+        1. Train all requests at once and accumulate edits to the model.
+        2. Evaluate each case on the fully trained model.
+        """
+        from pathlib import Path
+        results_dir = Path(f"./results/{data_set_name}/{self.alg_name}/{self.model_name.split('/')[-1]}_Continual")
+        if continue_from_run:
+            run_id = continue_from_run
+            run_file = results_dir / f"{continue_from_run}.json"
+            if run_file.exists():
+                all_metrics = json.load(open(run_file))
+                computed_cases = [item['case_id'] for item in all_metrics]
+                output_file = run_file
+        else:
+            if results_dir.exists():
+                id_list = [
+                    int(str(x).split("_")[-1][:3])
+                    for x in results_dir.iterdir()
+                    if str(x).split("_")[-1][:3].isnumeric()
+                ]
+                run_id = 0 if not id_list else max(id_list) + 1
+            else:
+                run_id = 0
+                os.makedirs(results_dir)
+            all_metrics = []
+            output_file = results_dir / f"run_{str(run_id).zfill(3)}.json"
+        
+        LOG.info(f"Results will be stored in {output_file}")
+
+        if data_set_name == "EditConala":
+            codebert_tokenizer = AutoTokenizer.from_pretrained("microsoft/codebert-base", local_files_only=True)
+        else:
+            codebert_tokenizer = None
+
+        # Phase 1: Train all data points into the model to accumulate edits
+        LOG.info("=" * 60)
+        LOG.info("Phase 1: Continual / Dataset-level training for baseline")
+        LOG.info("=" * 60)
+        start_train = time()
+        
+        # apply_algo with list of requests and keep_original_weight=False
+        edited_model, _ = self.apply_algo(
+            self.model,
+            self.tok,
+            list(requests),
+            self.hparams,
+            copy=False,
+            return_orig_weights=False,
+            keep_original_weight=False,
+        )
+        train_time = time() - start_train
+        LOG.info(f"Training completed in {train_time:.2f}s")
+
+        # Phase 2: Evaluate
+        LOG.info("=" * 60)
+        LOG.info("Phase 2: Evaluating each case on fully edited model")
+        LOG.info("=" * 60)
+        
+        for index, request in tqdm(enumerate(requests), total=len(requests)):
+            if request["case_id"] in ['']:
+                continue
+            request = request.copy()
+            if request["portability"] != "":
+                for line in requests:
+                    if line['case_id'] == request["portability"]:
+                        request["portability"] = line
+                        break
+            if continue_from_run and request["case_id"] in computed_cases:
+                LOG.debug(f"Case {request['case_id']} already exists.")
+                continue
+                
+            start = time()
+            torch.cuda.reset_peak_memory_stats(f"cuda:{self.hparams.device}")
+            
+            try:
+                gen_test_interval = generation_test_interval if generation_test_interval > 0 and index % generation_test_interval == 0 else -1
+            except ZeroDivisionError:
+                gen_test_interval = 0
+                
+            try:
+                all_metrics.append({
+                    'case_id': request['case_id'],
+                    'time': time() - start,
+                    'train_time': train_time,
+                    'max_memory': torch.cuda.max_memory_allocated(f"cuda:{self.hparams.device}") / 1024**2,
+                    'post': compute_edit_quality(
+                        edited_model, self.tok, request,
+                        test_generation=gen_test_interval > 0,
+                        tokenizer_for_fluency=codebert_tokenizer,
+                    )
+                })
+            except Exception as e:
+                LOG.error(f"Case {request['case_id']} error: {e}")
+                with open(output_file, 'w') as f:
+                    json.dump(all_metrics, f, ensure_ascii=False, indent=4)
+                raise RuntimeError(e)
+
+            LOG.debug(
+                f"{request['case_id']} eval: {request['prompt'][:60]}... -> {request['target_new'][:40]}...\n"
+                f"  {all_metrics[-1]}"
+            )
+            if (index + 1) % 10 == 0:
+                with open(output_file, 'w') as f:
+                    json.dump(all_metrics, f, ensure_ascii=False, indent=4)
+                    
+        with open(output_file, 'w') as f:
+            json.dump(all_metrics, f, ensure_ascii=False, indent=4)
+
+        mean_metrics = dict()
+        mean_metrics['run_id'] = run_id
+        mean_metrics['train_time'] = train_time
+        for metric in ['efficacy', 'generalization', 'portability', 'specificity']:
+            mean_metrics[metric] = dict()
+            for match_metric in MATCH_METRICS:
+                vals = [item['post'][metric][match_metric] for item in all_metrics]
+                mean_metrics[metric][match_metric] = (
+                    np.round(np.mean(vals) * 100, 2),
+                    np.round(np.std(vals) * 100, 2)
+                )
+        ngram_entropys = [item['post']['ngram_entropy'] for item in all_metrics if 'ngram_entropy' in item['post']]
+        mean_metrics['fluency'] = (
+            np.round(np.mean(ngram_entropys) * 100, 2) if ngram_entropys else 0,
+            np.round(np.std(ngram_entropys) * 100, 2) if ngram_entropys else 0
+        )
+        mean_metrics["time"] = (
+            np.round(np.mean([m["time"] for m in all_metrics]), 3),
+            np.round(np.std([m["time"] for m in all_metrics]), 3)
+        )
+        mean_metrics["max_memory"] = (
+            np.round(np.mean([m["max_memory"] for m in all_metrics]), 3),
+            np.round(np.std([m["max_memory"] for m in all_metrics]), 3)
+        )
+        mean_metrics["hparams"] = str(self.hparams)
+        mean_metrics_save_dir = results_dir / f"mean_run_{str(run_id).zfill(3)}.json"
+        with open(mean_metrics_save_dir, 'w') as f:
+            json.dump(mean_metrics, f, ensure_ascii=False)
+        LOG.info(f"Run {run_id}\nMetrics Summary: {mean_metrics}")
+        LOG.info(self.hparams)
+
+        return all_metrics, edited_model, None
