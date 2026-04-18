@@ -106,7 +106,8 @@ def execute_memit(
     z_layer = hparams.layers[-1]
     z_list = []
 
-    for request in requests:
+    from tqdm import tqdm
+    for request in tqdm(requests, desc="MEMIT: Computing Z vectors for requests"):
         # Retrieve k/v pair if already stored in cache
         cache_fname = (
             Path(
@@ -154,7 +155,7 @@ def execute_memit(
     zs = torch.stack(z_list, dim=1)
 
     # Insert
-    for i, layer in enumerate(hparams.layers):
+    for i, layer in tqdm(enumerate(hparams.layers), total=len(hparams.layers), desc="MEMIT: Inserting knowledge to layers"):
         LOG.debug(f"\n\nLAYER {layer}\n")
 
         # Get current model activations
